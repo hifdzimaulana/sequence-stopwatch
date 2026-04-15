@@ -195,13 +195,13 @@ function togglePause() {
         state = 'paused';
         pauseStart = Date.now();
         btn.innerHTML = '<i class="fa-solid fa-play"></i> Resume';
-        btn.className = 'btn btn-primary flex-1';
+        btn.className = 'btn btn-primary';
         clearInterval(intervalId);
     } else if (state === 'paused') {
         pauseAccumulated += Date.now() - pauseStart;
         state = 'running';
         btn.innerHTML = '<i class="fa-solid fa-pause"></i> Pause';
-        btn.className = 'btn btn-warning flex-1';
+        btn.className = 'btn btn-warning';
         intervalId = setInterval(updateTimerDisplay, 100);
     }
 }
@@ -212,6 +212,19 @@ function markDone() {
 }
 
 function stopTimer() {
+    showStopConfirm();
+}
+
+function showStopConfirm() {
+    document.getElementById('stopConfirmModal').style.display = 'flex';
+}
+
+function closeStopConfirm() {
+    document.getElementById('stopConfirmModal').style.display = 'none';
+}
+
+function confirmStop() {
+    closeStopConfirm();
     clearInterval(intervalId);
     state = 'setup';
     sessionName = '';
@@ -291,13 +304,10 @@ function updateTimerDisplay() {
     document.getElementById('currentEventName').textContent = `${currentIdx + 1}. ${ev.name}`;
 
     const doneBtn = document.getElementById('btnDone');
-    if (isOvertime) {
-        doneBtn.classList.add('overtime-state');
-        doneBtn.innerHTML = `<i class="fa-solid fa-check"></i> Mark Done (${fmtSign(eventElapsed - ev.plannedDuration)} late)`;
-    } else {
-        doneBtn.classList.remove('overtime-state');
-        doneBtn.innerHTML = `<i class="fa-solid fa-check"></i> Mark Done`;
-    }
+    const isLastEvent = currentIdx === events.length - 1;
+    doneBtn.innerHTML = isLastEvent 
+        ? '<i class="fa-solid fa-flag-checkered"></i> Finish' 
+        : '<i class="fa-solid fa-arrow-right"></i> Next';
 
     document.getElementById('statPlanned').textContent = fmt(totalPlannedSec());
     document.getElementById('statActual').textContent = fmt(elapsed);
@@ -325,25 +335,50 @@ function updateTimelineBars(totalElapsed) {
     updateTimeAxis(maxTime);
     const scale = 100 / maxTime;
 
+    let cumActual = 0;
     events.forEach((ev, i) => {
         const bar = document.getElementById('bar-fill-' + i);
+        const plannedBar = document.getElementById('bar-planned-' + i);
         const statusDot = document.getElementById('dot-' + i);
         if (!bar) return;
 
+        const barLeft = cumActual * scale;
+
         if (i < currentIdx) {
             const w = (ev.actualDuration || 0) * scale;
+            bar.style.left = barLeft + '%';
             bar.style.width = w + '%';
             bar.style.background = (ev.overtime || 0) > 0
                 ? 'linear-gradient(90deg, var(--accent) 0%, var(--danger) 100%)'
                 : 'var(--accent)';
+            if (plannedBar) {
+                const plannedW = ev.plannedDuration * scale;
+                plannedBar.style.left = barLeft + '%';
+                plannedBar.style.width = (ev.overtime || 0) > 0 ? plannedW + '%' : '0%';
+            }
             if (statusDot) statusDot.className = 'status-dot completed';
+            cumActual += ev.actualDuration || 0;
         } else if (i === currentIdx) {
-            const w = getEventElapsed() * scale;
+            const elapsed = getEventElapsed();
+            const w = elapsed * scale;
+            bar.style.left = barLeft + '%';
             bar.style.width = w + '%';
-            bar.style.background = getEventElapsed() > ev.plannedDuration ? 'var(--danger)' : 'var(--accent)';
+            bar.style.background = elapsed > ev.plannedDuration ? 'var(--danger)' : 'var(--accent)';
+            if (plannedBar) {
+                const plannedW = ev.plannedDuration * scale;
+                plannedBar.style.left = barLeft + '%';
+                const isOT = elapsed > ev.plannedDuration;
+                plannedBar.style.width = isOT ? plannedW + '%' : '0%';
+            }
             if (statusDot) statusDot.className = 'status-dot active';
+            cumActual += elapsed;
         } else {
+            bar.style.left = barLeft + '%';
             bar.style.width = '0%';
+            if (plannedBar) {
+                plannedBar.style.left = barLeft + '%';
+                plannedBar.style.width = '0%';
+            }
             if (statusDot) statusDot.className = 'status-dot pending';
         }
     });
@@ -371,15 +406,20 @@ function updateTimeAxis(maxTime) {
 function renderTimerList() {
     const container = document.getElementById('timerEventList');
     const totalPlanned = totalPlannedSec();
-    const maxTime = Math.max(totalPlanned, 1) * 1.08;
+    const totalActual = events.reduce((sum, ev, i) => {
+        if (i < currentIdx) return sum + (ev.actualDuration || 0);
+        if (i === currentIdx) return sum + getEventElapsed();
+        return sum;
+    }, 0);
+    const maxTime = Math.max(totalPlanned, totalActual, 1) * 1.08;
     const scale = 100 / maxTime;
 
     let html = '';
-    let cum = 0;
+    let cumActual = 0;
 
     events.forEach((ev, i) => {
         const barWidth = ev.plannedDuration * scale;
-        const barLeft = cum * scale;
+        const barLeft = cumActual * scale;
         const isCompleted = i < currentIdx;
         const isActive = i === currentIdx;
         const isLate = isCompleted && (ev.overtime || 0) > 0;
@@ -402,12 +442,17 @@ function renderTimerList() {
             </div>
             <div class="pl-8">
                 <div style="background: var(--bg); border-radius: 6px; height: 28px; position: relative; overflow: hidden;">
-                    <div style="position: absolute; left: ${barLeft}%; width: ${barWidth}%; height: 100%; background: rgba(37,51,71,0.5); border-radius: 5px;"></div>
+                    <div id="bar-planned-${i}" style="position: absolute; left: ${barLeft}%; width: ${barWidth}%; height: 100%; background: rgba(37,51,71,0.5); border-radius: 5px;"></div>
                     <div id="bar-fill-${i}" style="position: absolute; left: ${barLeft}%; width: 0%; height: 100%; top: 0; border-radius: 6px; transition: width 0.15s linear;"></div>
                 </div>
             </div>
         </div>`;
-        cum += ev.plannedDuration;
+
+        if (i < currentIdx) {
+            cumActual += ev.actualDuration || 0;
+        } else if (i === currentIdx) {
+            cumActual += getEventElapsed();
+        }
     });
 
     container.innerHTML = html;
@@ -591,7 +636,18 @@ function downloadChart() {
 
 function closeResult() {
     document.getElementById('resultModal').style.display = 'none';
-    stopTimer();
+    resetToSetup();
+}
+
+function resetToSetup() {
+    clearInterval(intervalId);
+    state = 'setup';
+    sessionName = '';
+    document.getElementById('timerView').style.display = 'none';
+    document.getElementById('setupView').style.display = '';
+    document.getElementById('overtimeBanner').style.display = 'none';
+    renderSetupList();
+    showToast('Sequence reset', 'info');
 }
 
 // ========== Init ==========

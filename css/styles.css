@@ -82,9 +82,9 @@ body::after {
 .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
 .btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
 .btn-secondary:hover { border-color: var(--muted); background: var(--surface); }
-.btn-danger { background: var(--danger-dim); color: var(--danger); }
+.btn-danger { background: var(--danger-dim); color: var(--danger); width: 100%; }
 .btn-danger:hover { background: rgba(239,68,68,0.25); }
-.btn-warning { background: var(--warning-dim); color: var(--warning); }
+.btn-warning { background: var(--warning-dim); color: var(--warning); width: 100%; }
 .btn-warning:hover { background: rgba(245,158,11,0.25); }
 .btn-icon {
     width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
@@ -145,8 +145,9 @@ input[type=number] { -moz-appearance: textfield; }
 
 .btn-done {
     background: linear-gradient(135deg, #10b981, #059669);
-    color: #fff; font-size: 16px; padding: 14px 0; width: 100%;
+    color: #fff; font-size: 16px; padding: 14px 20px; width: 100%;
     box-shadow: 0 4px 15px rgba(16,185,129,0.25);
+    text-align: center;
 }
 .btn-done:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(16,185,129,0.4); }
 .btn-done:active { transform: translateY(0); }
