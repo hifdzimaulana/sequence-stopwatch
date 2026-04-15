@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sequence Stopwatch</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: { extend: { fontFamily: { display: ['Space Grotesk', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] } } }
+        }
+    </script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="app">
+    <!-- Header -->
+    <header class="px-6 py-5 flex items-center justify-between border-b" style="border-color: var(--border); background: rgba(17,25,33,0.8); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 50;">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: var(--accent-dim);">
+                <i class="fa-solid fa-timeline" style="color: var(--accent); font-size: 16px;"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-tight" style="color: var(--text);">Sequence Stopwatch</h1>
+                <p class="text-xs" style="color: var(--muted);">Blocking event timeline tracker</p>
+            </div>
+        </div>
+        <div id="headerActions" class="flex items-center gap-2"></div>
+    </header>
+
+    <!-- Main -->
+    <main class="max-w-6xl mx-auto p-6">
+        <!-- Setup View -->
+        <div id="setupView">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold" style="color: var(--text);">Configure Sequence</h2>
+                    <p class="text-sm mt-1" style="color: var(--muted);">Add events in order. Press Done to transition. Delays cascade forward.</p>
+                </div>
+                <div class="flex gap-2">
+                    <button class="btn btn-secondary" onclick="loadFromFile()"><i class="fa-solid fa-file-import"></i> Load</button>
+                    <button class="btn btn-secondary" onclick="saveToFile()"><i class="fa-solid fa-file-export"></i> Save</button>
+                </div>
+            </div>
+
+            <div class="card p-4 mb-6">
+                <div class="flex flex-wrap items-end gap-3">
+                    <div style="min-width: 250px; flex: 1;">
+                        <label class="block text-xs font-semibold mb-2" style="color: var(--muted);">SESSION NAME</label>
+                        <input type="text" id="sessionName" class="input-field" placeholder="Untitled Session" maxlength="50">
+                    </div>
+                    <div class="flex-1" style="min-width: 200px;">
+                        <label class="block text-xs font-semibold mb-2" style="color: var(--muted);">EVENT NAME</label>
+                        <input type="text" id="eventName" class="input-field" placeholder="e.g. Setup Equipment" maxlength="50" onkeydown="if(event.key==='Enter') addEvent()">
+                    </div>
+                    <div style="width: 90px;">
+                        <label class="block text-xs font-semibold mb-2" style="color: var(--muted);">MINUTES</label>
+                        <input type="number" id="eventMin" class="input-field text-center" placeholder="0" min="0" max="999">
+                    </div>
+                    <div style="width: 90px;">
+                        <label class="block text-xs font-semibold mb-2" style="color: var(--muted);">SECONDS</label>
+                        <input type="number" id="eventSec" class="input-field text-center" placeholder="30" min="0" max="59">
+                    </div>
+                    <button class="btn btn-primary" onclick="addEvent()"><i class="fa-solid fa-plus"></i> Add Event</button>
+                </div>
+            </div>
+
+            <div id="eventList" class="space-y-3"></div>
+
+            <div id="emptyState" class="text-center py-16">
+                <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style="background: var(--accent-dim);">
+                    <i class="fa-solid fa-layer-group" style="color: var(--accent); font-size: 24px;"></i>
+                </div>
+                <p class="font-semibold mb-1" style="color: var(--muted);">No events yet</p>
+                <p class="text-sm" style="color: var(--border);">Add your first blocking event to get started</p>
+            </div>
+
+            <div id="startArea" class="mt-8 text-center" style="display:none;">
+                <div class="inline-flex items-center gap-4 card px-6 py-4">
+                    <div class="text-left">
+                        <p class="text-xs" style="color: var(--muted);">TOTAL PLANNED DURATION</p>
+                        <p id="totalPlanned" class="text-xl font-bold font-mono" style="color: var(--accent);">00:00</p>
+                    </div>
+                    <div style="width: 1px; height: 36px; background: var(--border);"></div>
+                    <div class="text-left">
+                        <p class="text-xs" style="color: var(--muted);">EVENTS</p>
+                        <p id="totalEvents" class="text-xl font-bold font-mono" style="color: var(--text);">0</p>
+                    </div>
+                    <button class="btn btn-primary ml-4" onclick="startTimer()" style="padding: 12px 28px; font-size: 15px;">
+                        <i class="fa-solid fa-play"></i> Start Sequence
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timer View -->
+        <div id="timerView" style="display:none;">
+            <div id="overtimeBanner" class="mb-4 rounded-xl px-5 py-3 flex items-center gap-3" style="display:none; background: var(--danger-dim); border: 1px solid rgba(239,68,68,0.3);">
+                <i class="fa-solid fa-triangle-exclamation" style="color: var(--danger);"></i>
+                <span class="text-sm font-semibold" style="color: var(--danger);">Sequence Running Overtime</span>
+                <span id="bannerOvertime" class="overtime-badge ml-auto">+00:00</span>
+            </div>
+
+            <div class="timer-layout flex gap-6" style="align-items: flex-start;">
+                <!-- Left Sidebar -->
+                <div class="timer-sidebar" style="width: 300px; flex-shrink: 0;">
+                    <div class="card p-6 text-center">
+                        <div class="relative inline-block mb-4">
+                            <svg width="180" height="180" viewBox="0 0 180 180">
+                                <circle class="progress-ring-bg" cx="90" cy="90" r="78" fill="none" stroke-width="6"/>
+                                <circle id="progressRing" class="progress-ring-fill" cx="90" cy="90" r="78" fill="none" stroke-width="6" stroke-dasharray="490.09" stroke-dashoffset="490.09" stroke-linecap="round"/>
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <p class="text-xs font-semibold mb-1" style="color: var(--muted);">TRACKING</p>
+                                <p id="currentEventName" class="text-sm font-bold" style="color: var(--text); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">—</p>
+                                <p id="currentTimer" class="text-3xl font-bold font-mono mt-2" style="color: var(--accent);">00:00</p>
+                                <p id="currentProgress" class="text-xs font-mono mt-1" style="color: var(--muted);">0%</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 mb-5">
+                            <div class="rounded-lg p-3" style="background: var(--surface);">
+                                <p class="text-xs" style="color: var(--muted);">Planned</p>
+                                <p id="statPlanned" class="text-sm font-bold font-mono" style="color: var(--text);">00:00</p>
+                            </div>
+                            <div class="rounded-lg p-3" style="background: var(--surface);">
+                                <p class="text-xs" style="color: var(--muted);">Actual</p>
+                                <p id="statActual" class="text-sm font-bold font-mono" style="color: var(--text);">00:00</p>
+                            </div>
+                            <div class="rounded-lg p-3" style="background: var(--surface);">
+                                <p class="text-xs" style="color: var(--muted);">Overtime</p>
+                                <p id="statOvertime" class="text-sm font-bold font-mono" style="color: var(--success);">00:00</p>
+                            </div>
+                            <div class="rounded-lg p-3" style="background: var(--surface);">
+                                <p class="text-xs" style="color: var(--muted);">Progress</p>
+                                <p id="statProgress" class="text-sm font-bold font-mono" style="color: var(--text);">0/0</p>
+                            </div>
+                        </div>
+
+                        <!-- Done Button -->
+                        <button id="btnDone" class="btn btn-done mb-2" onclick="markDone()">
+                            <i class="fa-solid fa-check"></i> Mark Done
+                        </button>
+
+                        <div class="flex gap-2">
+                            <button id="btnPause" class="btn btn-warning flex-1" onclick="togglePause()">
+                                <i class="fa-solid fa-pause"></i> Pause
+                            </button>
+                            <button class="btn btn-danger flex-1" onclick="stopTimer()">
+                                <i class="fa-solid fa-stop"></i> Stop
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Timeline -->
+                <div class="timer-main flex-1" style="min-width: 0;">
+                    <div class="card p-5">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-bold" style="color: var(--muted);">TIMELINE</h3>
+                            <div class="flex items-center gap-4 text-xs" style="color: var(--muted);">
+                                <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded" style="background: var(--accent);"></span> On time</span>
+                                <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded" style="background: var(--danger);"></span> Overtime</span>
+                                <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded" style="background: var(--border);"></span> Pending</span>
+                            </div>
+                        </div>
+                        <div id="timeAxis" class="mb-2 pl-20"></div>
+                        <div id="timerEventList" class="space-y-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <input type="file" id="fileInput" accept=".txt" style="display:none;" onchange="handleFileLoad(event)">
+
+    <!-- Result Modal -->
+    <div id="resultModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-xl font-bold">Sequence Complete</h2>
+                <button class="btn-icon" onclick="closeResult()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <canvas id="resultChart" style="width:100%; border-radius: 12px;"></canvas>
+            <div id="resultSummary" class="mt-5 grid grid-cols-3 gap-3"></div>
+            <div class="flex gap-3 mt-6">
+                <button class="btn btn-primary flex-1" onclick="downloadChart()"><i class="fa-solid fa-download"></i> Download Chart</button>
+                <button class="btn btn-secondary flex-1" onclick="closeResult()"><i class="fa-solid fa-arrow-rotate-left"></i> New Sequence</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
